@@ -12,7 +12,7 @@ A Python application for converting and manipulating time formats using a GUI bu
 ## Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/bigtoy-jpg/time-converter
+   git clone https://github.com/bigtoy-jpg/military_time-converter.git
    cd time-converter
    ```
 
