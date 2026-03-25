@@ -1,8 +1,1 @@
-pytz
-tkinter
-typing
-dataclasses
-functools
-logging
-re
-datetime
+pytz>=2023.3

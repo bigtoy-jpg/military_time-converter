@@ -40,9 +40,11 @@ def validate_time(func):
         except TimeFormatError as e:
             logging.error(f"Time format error in {func.__name__}: {str(e)}")
             messagebox.showerror("Time Format Error", str(e))
+            return None
         except Exception as e:
             logging.error(f"Unexpected error in {func.__name__}: {str(e)}")
             messagebox.showerror("Unexpected Error", str(e))
+            return None
     return wrapper
 
 @validate_time
@@ -79,26 +81,32 @@ def military_to_standard_time(military_time: str, use_24h: bool = False) -> str:
     else:
         standard_hours = time.hours
 
-    return f"{standard_hours}:{time.minutes:02d}:{time.seconds:02d} {period}"
+    return f"{standard_hours:02d}:{time.minutes:02d}:{time.seconds:02d} {period}"
 
 @validate_time
 def standard_to_military_time(standard_time: str) -> str:
     """Convert standard (12-hour) time to military (24-hour) time."""
+    # First try to match standard 12-hour format with AM/PM
     standard_time_pattern = re.compile(r'^(1[0-2]|0?[1-9]):([0-5][0-9]):?([0-5]?[0-9])? ?(AM|PM)$', re.IGNORECASE)
     match = standard_time_pattern.match(standard_time)
     
-    if not match:
-        raise TimeFormatError("Invalid standard time format. Use HH:MM:SS AM/PM.")
-    
-    hours, minutes, seconds, period = match.groups()
-    hours = int(hours)
-    minutes = int(minutes)
-    seconds = int(seconds) if seconds else 0
-    
-    if period.upper() == 'PM' and hours != HOURS_IN_HALF_DAY:
-        hours += HOURS_IN_HALF_DAY
-    elif period.upper() == 'AM' and hours == HOURS_IN_HALF_DAY:
-        hours = 0
+    if match:
+        hours, minutes, seconds, period = match.groups()
+        hours = int(hours)
+        minutes = int(minutes)
+        seconds = int(seconds) if seconds else 0
+        
+        if period.upper() == 'PM' and hours != HOURS_IN_HALF_DAY:
+            hours += HOURS_IN_HALF_DAY
+        elif period.upper() == 'AM' and hours == HOURS_IN_HALF_DAY:
+            hours = 0
+    else:
+        # If no AM/PM found, assume it's already in 24-hour format and validate
+        try:
+            time = parse_time(standard_time)
+            hours, minutes, seconds = time.hours, time.minutes, time.seconds
+        except TimeFormatError:
+            raise TimeFormatError("Invalid time format. Use HH:MM:SS AM/PM or HH:MM:SS (24-hour).")
 
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
@@ -134,10 +142,17 @@ def time_difference(time1: str, time2: str) -> str:
 def convert_timezone(time_str: str, from_tz: str, to_tz: str) -> str:
     """Convert time between two timezones."""
     time = parse_time(time_str)
-    from_zone = pytz.timezone(from_tz)
-    to_zone = pytz.timezone(to_tz)
+    
+    try:
+        from_zone = pytz.timezone(from_tz)
+        to_zone = pytz.timezone(to_tz)
+    except pytz.UnknownTimeZoneError as e:
+        raise TimeFormatError(f"Unknown timezone: {str(e)}")
 
-    dt = datetime.now(from_zone).replace(hour=time.hours, minute=time.minutes, second=time.seconds, microsecond=0)
+    # Use today's date with the specified time
+    today = datetime.now(pytz.UTC).date()
+    dt = datetime.combine(today, datetime.min.time().replace(hour=time.hours, minute=time.minutes, second=time.seconds))
+    dt = from_zone.localize(dt)
     converted_time = dt.astimezone(to_zone)
     
     return f"{converted_time.strftime('%H:%M:%S')} {to_tz}"
